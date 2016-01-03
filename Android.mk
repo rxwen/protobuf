@@ -65,19 +65,6 @@ LOCAL_CPP_EXTENSION := .cc
 
 LOCAL_SRC_FILES := $(PROTOBUF_LIB_SRC_FILES)
 
-#ifneq ($(TARGET_SIMULATOR),true)
-#LOCAL_C_INCLUDES += external/stlport/stlport 
-#LOCAL_C_INCLUDES += bionic		# very important!
-#LOCAL_SHARED_LIBRARIES += libstlport libdl
-#else
-#LOCAL_LDLIBS += -lpthread
-#endif
-
-#HEADERS := include/zmq.h \
-	#include/zmq_utils.h
-
-#LOCAL_COPY_HEADERS := $(HEADERS)
-
 LOCAL_MODULE := libprotobuf
 include $(BUILD_SHARED_LIBRARY)
 
