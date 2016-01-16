@@ -46,9 +46,7 @@ PROTOBUF_LIB_SRC_FILES := \
 	src/google/protobuf/unknown_field_set.cc \
 	src/google/protobuf/wire_format.cc \
 	src/google/protobuf/service.cc
-
 	#src/google/protobuf/io/gzip_stream.cc \
-
 	#src/google/protobuf/testing/zcgunzip.cc \
 	#src/google/protobuf/testing/file.cc \
 	#src/google/protobuf/testing/zcgzip.cc \
