@@ -52,7 +52,6 @@ PROTOBUF_LIB_SRC_FILES := \
 	#src/google/protobuf/testing/zcgzip.cc \
 	#src/google/protobuf/testing/googletest.cc \
 
-
 include $(CLEAR_VARS)
 LOCAL_MODULE_TAGS := eng
 LOCAL_C_INCLUDES := $(LOCAL_PATH)/src \
