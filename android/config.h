@@ -26,10 +26,10 @@
 #define HAVE_FTRUNCATE 1
 
 /* define if the compiler has hash_map */
-#define HAVE_HASH_MAP 1
+/* #undef HAVE_HASH_MAP */
 
 /* define if the compiler has hash_set */
-#define HAVE_HASH_SET 1
+/* #undef HAVE_HASH_SET */
 
 /* Define to 1 if you have the <inttypes.h> header file. */
 #define HAVE_INTTYPES_H 1
