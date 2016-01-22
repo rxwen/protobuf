@@ -128,7 +128,6 @@ PROTOBUF_COMPILER_SRC_FILES := \
 	src/google/protobuf/compiler/parser.cc
 
 include $(CLEAR_VARS)
-LOCAL_MODULE_TAGS := eng
 LOCAL_C_INCLUDES := $(LOCAL_PATH)/src \
 	$(LOCAL_PATH)/android
 
