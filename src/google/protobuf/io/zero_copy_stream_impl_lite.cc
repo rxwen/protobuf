@@ -37,7 +37,9 @@
 #include <algorithm>
 #include <limits>
 
+#include <google/protobuf/stubs/casts.h>
 #include <google/protobuf/stubs/common.h>
+#include <google/protobuf/stubs/logging.h>
 #include <google/protobuf/stubs/stl_util.h>
 
 namespace google {
@@ -155,6 +157,7 @@ StringOutputStream::~StringOutputStream() {
 }
 
 bool StringOutputStream::Next(void** data, int* size) {
+  GOOGLE_CHECK_NE(NULL, target_);
   int old_size = target_->size();
 
   // Grow the string.
@@ -186,12 +189,42 @@ bool StringOutputStream::Next(void** data, int* size) {
 
 void StringOutputStream::BackUp(int count) {
   GOOGLE_CHECK_GE(count, 0);
+  GOOGLE_CHECK_NE(NULL, target_);
   GOOGLE_CHECK_LE(count, target_->size());
   target_->resize(target_->size() - count);
 }
 
 int64 StringOutputStream::ByteCount() const {
+  GOOGLE_CHECK_NE(NULL, target_);
   return target_->size();
+}
+
+void StringOutputStream::SetString(string* target) {
+  target_ = target;
+}
+
+// ===================================================================
+
+LazyStringOutputStream::LazyStringOutputStream(
+    ResultCallback<string*>* callback)
+    : StringOutputStream(NULL),
+      callback_(GOOGLE_CHECK_NOTNULL(callback)),
+      string_is_set_(false) {
+}
+
+LazyStringOutputStream::~LazyStringOutputStream() {
+}
+
+bool LazyStringOutputStream::Next(void** data, int* size) {
+  if (!string_is_set_) {
+    SetString(callback_->Run());
+    string_is_set_ = true;
+  }
+  return StringOutputStream::Next(data, size);
+}
+
+int64 LazyStringOutputStream::ByteCount() const {
+  return string_is_set_ ? StringOutputStream::ByteCount() : 0;
 }
 
 // ===================================================================

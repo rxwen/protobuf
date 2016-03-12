@@ -32,9 +32,13 @@ package com.google.protobuf;
 
 import junit.framework.TestCase;
 
+import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
+import java.io.EOFException;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
 import java.io.OutputStream;
 import java.io.UnsupportedEncodingException;
 import java.nio.ByteBuffer;
@@ -206,6 +210,62 @@ public class LiteralByteStringTest extends TestCase {
         Arrays.equals(referenceBytes, myBuffer.array()));
   }
 
+  public void testMarkSupported() {
+    InputStream stream = stringUnderTest.newInput();
+    assertTrue(classUnderTest + ".newInput() must support marking", stream.markSupported());
+  }
+
+  public void testMarkAndReset() throws IOException {
+    int fraction = stringUnderTest.size() / 3;
+
+    InputStream stream = stringUnderTest.newInput();
+    stream.mark(stringUnderTest.size()); // First, mark() the end.
+
+    skipFully(stream, fraction); // Skip a large fraction, but not all.
+    int available = stream.available();
+    assertTrue(
+        classUnderTest + ": after skipping to the 'middle', half the bytes are available",
+        (stringUnderTest.size() - fraction) == available);
+    stream.reset();
+
+    skipFully(stream, stringUnderTest.size()); // Skip to the end.
+    available = stream.available();
+    assertTrue(
+        classUnderTest + ": after skipping to the end, no more bytes are available",
+        0 == available);
+  }
+
+  /**
+   * Discards {@code n} bytes of data from the input stream. This method
+   * will block until the full amount has been skipped. Does not close the
+   * stream.
+   * <p>Copied from com.google.common.io.ByteStreams to avoid adding dependency.
+   *
+   * @param in the input stream to read from
+   * @param n the number of bytes to skip
+   * @throws EOFException if this stream reaches the end before skipping all
+   *     the bytes
+   * @throws IOException if an I/O error occurs, or the stream does not
+   *     support skipping
+   */
+  static void skipFully(InputStream in, long n) throws IOException {
+    long toSkip = n;
+    while (n > 0) {
+      long amt = in.skip(n);
+      if (amt == 0) {
+        // Force a blocking read to avoid infinite loop
+        if (in.read() == -1) {
+          long skipped = toSkip - n;
+          throw new EOFException("reached end of stream after skipping "
+              + skipped + " bytes; " + toSkip + " bytes expected");
+        }
+        n--;
+      } else {
+        n -= amt;
+      }
+    }
+  }
+
   public void testAsReadOnlyByteBuffer() {
     ByteBuffer byteBuffer = stringUnderTest.asReadOnlyByteBuffer();
     byte[] roundTripBytes = new byte[referenceBytes.length];
@@ -245,7 +305,7 @@ public class LiteralByteStringTest extends TestCase {
     assertTrue(classUnderTest + ".writeTo() must give back the same bytes",
         Arrays.equals(referenceBytes, roundTripBytes));
   }
-  
+
   public void testWriteTo_mutating() throws IOException {
     OutputStream os = new OutputStream() {
       @Override
@@ -286,14 +346,42 @@ public class LiteralByteStringTest extends TestCase {
     assertEquals("Output.reset() resets the output", 0, output.size());
     assertEquals("Output.reset() resets the output",
         ByteString.EMPTY, output.toByteString());
-    
   }
 
   public void testToString() throws UnsupportedEncodingException {
     String testString = "I love unicode \u1234\u5678 characters";
-    LiteralByteString unicode = new LiteralByteString(testString.getBytes(UTF_8));
+    LiteralByteString unicode = new LiteralByteString(testString.getBytes(Internal.UTF_8));
     String roundTripString = unicode.toString(UTF_8);
     assertEquals(classUnderTest + " unicode must match", testString, roundTripString);
+  }
+
+  public void testCharsetToString() {
+    String testString = "I love unicode \u1234\u5678 characters";
+    LiteralByteString unicode = new LiteralByteString(testString.getBytes(Internal.UTF_8));
+    String roundTripString = unicode.toString(Internal.UTF_8);
+    assertEquals(classUnderTest + " unicode must match", testString, roundTripString);
+  }
+
+  public void testToString_returnsCanonicalEmptyString() {
+    assertSame(classUnderTest + " must be the same string references",
+        ByteString.EMPTY.toString(Internal.UTF_8),
+        new LiteralByteString(new byte[]{}).toString(Internal.UTF_8));
+  }
+
+  public void testToString_raisesException() {
+    try {
+      ByteString.EMPTY.toString("invalid");
+      fail("Should have thrown an exception.");
+    } catch (UnsupportedEncodingException expected) {
+      // This is success
+    }
+
+    try {
+      new LiteralByteString(referenceBytes).toString("invalid");
+      fail("Should have thrown an exception.");
+    } catch (UnsupportedEncodingException expected) {
+      // This is success
+    }
   }
 
   public void testEquals() {
@@ -308,7 +396,7 @@ public class LiteralByteStringTest extends TestCase {
 
     byte[] mungedBytes = new byte[referenceBytes.length];
     System.arraycopy(referenceBytes, 0, mungedBytes, 0, referenceBytes.length);
-    mungedBytes[mungedBytes.length - 5] ^= 0xFF;
+    mungedBytes[mungedBytes.length - 5] = (byte) (mungedBytes[mungedBytes.length - 5] ^ 0xFF);
     assertFalse(classUnderTest + " must not equal every string with the same length",
         stringUnderTest.equals(new LiteralByteString(mungedBytes)));
   }
@@ -392,5 +480,18 @@ public class LiteralByteStringTest extends TestCase {
         stringUnderTest.concat(ByteString.EMPTY), stringUnderTest);
     assertSame("empty concatenated with " + classUnderTest + " must give " + classUnderTest,
         ByteString.EMPTY.concat(stringUnderTest), stringUnderTest);
+  }
+
+  public void testJavaSerialization() throws Exception {
+    ByteArrayOutputStream out = new ByteArrayOutputStream();
+    ObjectOutputStream oos = new ObjectOutputStream(out);
+    oos.writeObject(stringUnderTest);
+    oos.close();
+    byte[] pickled = out.toByteArray();
+    InputStream in = new ByteArrayInputStream(pickled);
+    ObjectInputStream ois = new ObjectInputStream(in);
+    Object o = ois.readObject();
+    assertTrue("Didn't get a ByteString back", o instanceof ByteString);
+    assertEquals("Should get an equal ByteString back", stringUnderTest, o);
   }
 }

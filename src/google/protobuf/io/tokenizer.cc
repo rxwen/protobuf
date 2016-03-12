@@ -90,6 +90,7 @@
 
 #include <google/protobuf/io/tokenizer.h>
 #include <google/protobuf/stubs/common.h>
+#include <google/protobuf/stubs/logging.h>
 #include <google/protobuf/stubs/stringprintf.h>
 #include <google/protobuf/io/strtod.h>
 #include <google/protobuf/io/zero_copy_stream.h>
@@ -374,7 +375,7 @@ void Tokenizer::ConsumeString(char delimiter) {
           // Possibly followed by two more octal digits, but these will
           // just be consumed by the main loop anyway so we don't need
           // to do so explicitly here.
-        } else if (TryConsume('x') || TryConsume('X')) {
+        } else if (TryConsume('x')) {
           if (!TryConsumeOne<HexDigit>()) {
             AddError("Expected hex digits for escape sequence.");
           }
@@ -762,6 +763,15 @@ bool Tokenizer::NextWithComments(string* prev_trailing_comments,
                              next_leading_comments);
 
   if (current_.type == TYPE_START) {
+    // Ignore unicode byte order mark(BOM) if it appears at the file
+    // beginning. Only UTF-8 BOM (0xEF 0xBB 0xBF) is accepted.
+    if (TryConsume((char)0xEF)) {
+      if (!TryConsume((char)0xBB) || !TryConsume((char)0xBF)) {
+        AddError("Proto file starts with 0xEF but not UTF-8 BOM. "
+                 "Only UTF-8 is accepted for proto file.");
+        return false;
+      }
+    }
     collector.DetachFromPrev();
   } else {
     // A comment appearing on the same line must be attached to the previous

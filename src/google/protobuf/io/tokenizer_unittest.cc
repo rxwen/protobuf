@@ -41,6 +41,7 @@
 #include <google/protobuf/io/zero_copy_stream_impl.h>
 
 #include <google/protobuf/stubs/common.h>
+#include <google/protobuf/stubs/logging.h>
 #include <google/protobuf/stubs/strutil.h>
 #include <google/protobuf/stubs/substitute.h>
 #include <google/protobuf/testing/googletest.h>
@@ -873,6 +874,8 @@ inline ostream& operator<<(ostream& out,
 ErrorCase kErrorCases[] = {
   // String errors.
   { "'\\l' foo", true,
+    "0:2: Invalid escape sequence in string literal.\n" },
+  { "'\\X' foo", true,
     "0:2: Invalid escape sequence in string literal.\n" },
   { "'\\x' foo", true,
     "0:3: Expected hex digits for escape sequence.\n" },

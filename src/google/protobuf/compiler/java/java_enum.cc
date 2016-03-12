@@ -85,17 +85,10 @@ EnumGenerator::~EnumGenerator() {}
 
 void EnumGenerator::Generate(io::Printer* printer) {
   WriteEnumDocComment(printer, descriptor_);
-  if (HasDescriptorMethods(descriptor_)) {
-    printer->Print(
-      "public enum $classname$\n"
-      "    implements com.google.protobuf.ProtocolMessageEnum {\n",
-      "classname", descriptor_->name());
-  } else {
-    printer->Print(
-      "public enum $classname$\n"
-      "    implements com.google.protobuf.Internal.EnumLite {\n",
-      "classname", descriptor_->name());
-  }
+  printer->Print(
+    "public enum $classname$\n"
+    "    implements com.google.protobuf.ProtocolMessageEnum {\n",
+    "classname", descriptor_->name());
   printer->Indent();
 
   for (int i = 0; i < canonical_values_.size(); i++) {
@@ -109,6 +102,10 @@ void EnumGenerator::Generate(io::Printer* printer) {
     }
     printer->Print(vars,
       "$name$($index$, $number$),\n");
+  }
+
+  if (SupportUnknownEnumValue(descriptor_->file())) {
+    printer->Print("UNRECOGNIZED(-1, -1),\n");
   }
 
   printer->Print(
@@ -141,7 +138,17 @@ void EnumGenerator::Generate(io::Printer* printer) {
 
   printer->Print(
     "\n"
-    "public final int getNumber() { return value; }\n"
+    "public final int getNumber() {\n");
+  if (SupportUnknownEnumValue(descriptor_->file())) {
+    printer->Print(
+      "  if (index == -1) {\n"
+      "    throw new java.lang.IllegalArgumentException(\n"
+      "        \"Can't get the number of an unknown enum value.\");\n"
+      "  }\n");
+  }
+  printer->Print(
+    "  return value;\n"
+    "}\n"
     "\n"
     "public static $classname$ valueOf(int value) {\n"
     "  switch (value) {\n",
@@ -167,8 +174,8 @@ void EnumGenerator::Generate(io::Printer* printer) {
     "    internalGetValueMap() {\n"
     "  return internalValueMap;\n"
     "}\n"
-    "private static com.google.protobuf.Internal.EnumLiteMap<$classname$>\n"
-    "    internalValueMap =\n"
+    "private static final com.google.protobuf.Internal.EnumLiteMap<\n"
+    "    $classname$> internalValueMap =\n"
     "      new com.google.protobuf.Internal.EnumLiteMap<$classname$>() {\n"
     "        public $classname$ findValueByNumber(int number) {\n"
     "          return $classname$.valueOf(number);\n"
@@ -231,11 +238,12 @@ void EnumGenerator::Generate(io::Printer* printer) {
             "index", SimpleItoa(descriptor_->index()));
         }
         printer->Print(
-          "return $immutable_package$.$descriptor_class$.getDescriptor()\n"
+          "return $immutable_package$.$descriptor_class$.$descriptor$\n"
           "    .getEnumTypes().get($index$);\n",
           "immutable_package", FileJavaPackage(descriptor_->file(), true),
           "descriptor_class",
           name_resolver_->GetDescriptorClassName(descriptor_->file()),
+          "descriptor", "getDescriptor()",
           "index", SimpleItoa(descriptor_->index()));
         printer->Outdent();
       }
@@ -283,13 +291,19 @@ void EnumGenerator::Generate(io::Printer* printer) {
       "  if (desc.getType() != getDescriptor()) {\n"
       "    throw new java.lang.IllegalArgumentException(\n"
       "      \"EnumValueDescriptor is not for this type.\");\n"
-      "  }\n"
+      "  }\n",
+      "classname", descriptor_->name());
+    if (SupportUnknownEnumValue(descriptor_->file())) {
+      printer->Print(
+        "  if (desc.getIndex() == -1) {\n"
+        "    return UNRECOGNIZED;\n"
+        "  }\n");
+    }
+    printer->Print(
       "  return VALUES[desc.getIndex()];\n"
       "}\n"
-      "\n",
-      "classname", descriptor_->name());
+      "\n");
 
-    // index is only used for reflection; lite implementation does not need it
     printer->Print("private final int index;\n");
   }
 
