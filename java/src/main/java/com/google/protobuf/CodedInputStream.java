@@ -373,14 +373,14 @@ public final class CodedInputStream {
     if (size <= (bufferSize - bufferPos) && size > 0) {
       // Fast path:  We already have the bytes in a contiguous buffer, so
       //   just copy directly from it.
-      final String result = new String(buffer, bufferPos, size, Internal.UTF_8);
+      final String result = new String(buffer, bufferPos, size, "UTF-8");
       bufferPos += size;
       return result;
     } else if (size == 0) {
       return "";
     } else {
       // Slow path:  Build a byte array first then copy it.
-      return new String(readRawBytesSlowPath(size), Internal.UTF_8);
+      return new String(readRawBytesSlowPath(size), "UTF-8");
     }
   }
 
@@ -409,7 +409,7 @@ public final class CodedInputStream {
     if (!Utf8.isValidUtf8(bytes, pos, pos + size)) {
       throw InvalidProtocolBufferException.invalidUtf8();
     }
-    return new String(bytes, pos, size, Internal.UTF_8);
+    return new String(bytes, pos, size, "UTF-8");
   }
 
   /** Read a {@code group} field value from the stream. */
@@ -612,16 +612,16 @@ public final class CodedInputStream {
         return x;
       } else if (bufferSize - pos < 9) {
         break fastpath;
-      } else if ((x ^= (buffer[pos++] << 7)) < 0) {
-        x ^= (~0 << 7);
-      } else if ((x ^= (buffer[pos++] << 14)) >= 0) {
-        x ^= (~0 << 7) ^ (~0 << 14);
-      } else if ((x ^= (buffer[pos++] << 21)) < 0) {
-        x ^= (~0 << 7) ^ (~0 << 14) ^ (~0 << 21);
+      } else if ((x ^= (buffer[pos++] << 7)) < 0L) {
+        x ^= (~0L << 7);
+      } else if ((x ^= (buffer[pos++] << 14)) >= 0L) {
+        x ^= (~0L << 7) ^ (~0L << 14);
+      } else if ((x ^= (buffer[pos++] << 21)) < 0L) {
+        x ^= (~0L << 7) ^ (~0L << 14) ^ (~0L << 21);
       } else {
         int y = buffer[pos++];
         x ^= y << 28;
-        x ^= (~0 << 7) ^ (~0 << 14) ^ (~0 << 21) ^ (~0 << 28);
+        x ^= (~0L << 7) ^ (~0L << 14) ^ (~0L << 21) ^ (~0L << 28);
         if (y < 0 &&
             buffer[pos++] < 0 &&
             buffer[pos++] < 0 &&
@@ -739,13 +739,13 @@ public final class CodedInputStream {
         return y;
       } else if (bufferSize - pos < 9) {
         break fastpath;
-      } else if ((y ^= (buffer[pos++] << 7)) < 0) {
-        x = y ^ (~0 << 7);
-      } else if ((y ^= (buffer[pos++] << 14)) >= 0) {
-        x = y ^ ((~0 << 7) ^ (~0 << 14));
-      } else if ((y ^= (buffer[pos++] << 21)) < 0) {
-        x = y ^ ((~0 << 7) ^ (~0 << 14) ^ (~0 << 21));
-      } else if ((x = ((long) y) ^ ((long) buffer[pos++] << 28)) >= 0L) {
+      } else if ((x = y ^ (buffer[pos++] << 7)) < 0L) {
+        x ^= (~0L << 7);
+      } else if ((x ^= (buffer[pos++] << 14)) >= 0L) {
+        x ^= (~0L << 7) ^ (~0L << 14);
+      } else if ((x ^= (buffer[pos++] << 21)) < 0L) {
+        x ^= (~0L << 7) ^ (~0L << 14) ^ (~0L << 21);
+      } else if ((x ^= ((long) buffer[pos++] << 28)) >= 0L) {
         x ^= (~0L << 7) ^ (~0L << 14) ^ (~0L << 21) ^ (~0L << 28);
       } else if ((x ^= ((long) buffer[pos++] << 35)) < 0L) {
         x ^= (~0L << 7) ^ (~0L << 14) ^ (~0L << 21) ^ (~0L << 28) ^ (~0L << 35);
@@ -882,7 +882,7 @@ public final class CodedInputStream {
   /** See setSizeLimit() */
   private int sizeLimit = DEFAULT_SIZE_LIMIT;
 
-  private static final int DEFAULT_RECURSION_LIMIT = 100;
+  private static final int DEFAULT_RECURSION_LIMIT = 64;
   private static final int DEFAULT_SIZE_LIMIT = 64 << 20;  // 64MB
   private static final int BUFFER_SIZE = 4096;
 
@@ -1056,6 +1056,20 @@ public final class CodedInputStream {
   private RefillCallback refillCallback = null;
 
   /**
+   * Ensures that at least {@code n} bytes are available in the buffer, reading
+   * more bytes from the input if necessary to make it so.  Caller must ensure
+   * that the requested space is less than BUFFER_SIZE.
+   *
+   * @throws InvalidProtocolBufferException The end of the stream or the current
+   *                                        limit was reached.
+   */
+  private void ensureAvailable(int n) throws IOException {
+    if (bufferSize - bufferPos < n) {
+      refillBuffer(n);
+    }
+  }
+
+  /**
    * Reads more bytes from the input, making at least {@code n} bytes available
    * in the buffer.  Caller must ensure that the requested space is not yet
    * available, and that the requested space is less than BUFFER_SIZE.
@@ -1166,97 +1180,86 @@ public final class CodedInputStream {
       }
     }
 
-    // Verify that the message size so far has not exceeded sizeLimit.
-    int currentMessageSize = totalBytesRetired + bufferPos + size;
-    if (currentMessageSize > sizeLimit) {
-      throw InvalidProtocolBufferException.sizeLimitExceeded();
-    }
-
-    // Verify that the message size so far has not exceeded currentLimit.
-    if (currentMessageSize > currentLimit) {
+    if (totalBytesRetired + bufferPos + size > currentLimit) {
       // Read to the end of the stream anyway.
       skipRawBytes(currentLimit - totalBytesRetired - bufferPos);
+      // Then fail.
       throw InvalidProtocolBufferException.truncatedMessage();
     }
 
-    // We need the input stream to proceed.
-    if (input == null) {
-      throw InvalidProtocolBufferException.truncatedMessage();
-    }
+    if (size < BUFFER_SIZE) {
+      // Reading more bytes than are in the buffer, but not an excessive number
+      // of bytes.  We can safely allocate the resulting array ahead of time.
 
-    final int originalBufferPos = bufferPos;
-    final int bufferedBytes = bufferSize - bufferPos;
-
-    // Mark the current buffer consumed.
-    totalBytesRetired += bufferSize;
-    bufferPos = 0;
-    bufferSize = 0;
-
-    // Determine the number of bytes we need to read from the input stream.
-    int sizeLeft = size - bufferedBytes;
-    // TODO(nathanmittler): Consider using a value larger than BUFFER_SIZE.
-    if (sizeLeft < BUFFER_SIZE || sizeLeft <= input.available()) {
-      // Either the bytes we need are known to be available, or the required buffer is
-      // within an allowed threshold - go ahead and allocate the buffer now.
+      // First copy what we have.
       final byte[] bytes = new byte[size];
+      int pos = bufferSize - bufferPos;
+      System.arraycopy(buffer, bufferPos, bytes, 0, pos);
+      bufferPos = bufferSize;
 
-      // Copy all of the buffered bytes to the result buffer.
-      System.arraycopy(buffer, originalBufferPos, bytes, 0, bufferedBytes);
-
-      // Fill the remaining bytes from the input stream.
-      int pos = bufferedBytes;
-      while (pos < bytes.length) {
-        int n = input.read(bytes, pos, size - pos);
-        if (n == -1) {
-          throw InvalidProtocolBufferException.truncatedMessage();
-        }
-        totalBytesRetired += n;
-        pos += n;
-      }
+      // We want to refill the buffer and then copy from the buffer into our
+      // byte array rather than reading directly into our byte array because
+      // the input may be unbuffered.
+      ensureAvailable(size - pos);
+      System.arraycopy(buffer, 0, bytes, pos, size - pos);
+      bufferPos = size - pos;
 
       return bytes;
-    }
+    } else {
+      // The size is very large.  For security reasons, we can't allocate the
+      // entire byte array yet.  The size comes directly from the input, so a
+      // maliciously-crafted message could provide a bogus very large size in
+      // order to trick the app into allocating a lot of memory.  We avoid this
+      // by allocating and reading only a small chunk at a time, so that the
+      // malicious message must actually *be* extremely large to cause
+      // problems.  Meanwhile, we limit the allowed size of a message elsewhere.
 
-    // The size is very large.  For security reasons, we can't allocate the
-    // entire byte array yet.  The size comes directly from the input, so a
-    // maliciously-crafted message could provide a bogus very large size in
-    // order to trick the app into allocating a lot of memory.  We avoid this
-    // by allocating and reading only a small chunk at a time, so that the
-    // malicious message must actually *be* extremely large to cause
-    // problems.  Meanwhile, we limit the allowed size of a message elsewhere.
-    final List<byte[]> chunks = new ArrayList<byte[]>();
+      // Remember the buffer markers since we'll have to copy the bytes out of
+      // it later.
+      final int originalBufferPos = bufferPos;
+      final int originalBufferSize = bufferSize;
 
-    while (sizeLeft > 0) {
-      // TODO(nathanmittler): Consider using a value larger than BUFFER_SIZE.
-      final byte[] chunk = new byte[Math.min(sizeLeft, BUFFER_SIZE)];
-      int pos = 0;
-      while (pos < chunk.length) {
-        final int n = input.read(chunk, pos, chunk.length - pos);
-        if (n == -1) {
-          throw InvalidProtocolBufferException.truncatedMessage();
+      // Mark the current buffer consumed.
+      totalBytesRetired += bufferSize;
+      bufferPos = 0;
+      bufferSize = 0;
+
+      // Read all the rest of the bytes we need.
+      int sizeLeft = size - (originalBufferSize - originalBufferPos);
+      final List<byte[]> chunks = new ArrayList<byte[]>();
+
+      while (sizeLeft > 0) {
+        final byte[] chunk = new byte[Math.min(sizeLeft, BUFFER_SIZE)];
+        int pos = 0;
+        while (pos < chunk.length) {
+          final int n = (input == null) ? -1 :
+            input.read(chunk, pos, chunk.length - pos);
+          if (n == -1) {
+            throw InvalidProtocolBufferException.truncatedMessage();
+          }
+          totalBytesRetired += n;
+          pos += n;
         }
-        totalBytesRetired += n;
-        pos += n;
+        sizeLeft -= chunk.length;
+        chunks.add(chunk);
       }
-      sizeLeft -= chunk.length;
-      chunks.add(chunk);
+
+      // OK, got everything.  Now concatenate it all into one buffer.
+      final byte[] bytes = new byte[size];
+
+      // Start by copying the leftover bytes from this.buffer.
+      int pos = originalBufferSize - originalBufferPos;
+      System.arraycopy(buffer, originalBufferPos, bytes, 0, pos);
+
+      // And now all the chunks.
+      for (final byte[] chunk : chunks) {
+        System.arraycopy(chunk, 0, bytes, pos, chunk.length);
+        pos += chunk.length;
+      }
+
+      // Done.
+      return bytes;
     }
-
-    // OK, got everything.  Now concatenate it all into one buffer.
-    final byte[] bytes = new byte[size];
-
-    // Start by copying the leftover bytes from this.buffer.
-    System.arraycopy(buffer, originalBufferPos, bytes, 0, bufferedBytes);
-
-    // And now all the chunks.
-    int pos = bufferedBytes;
-    for (final byte[] chunk : chunks) {
-      System.arraycopy(chunk, 0, bytes, pos, chunk.length);
-      pos += chunk.length;
-    }
-
-    // Done.
-    return bytes;
   }
 
   /**

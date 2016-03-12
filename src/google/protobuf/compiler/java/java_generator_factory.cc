@@ -38,7 +38,6 @@
 #include <google/protobuf/compiler/java/java_field.h>
 #include <google/protobuf/compiler/java/java_helpers.h>
 #include <google/protobuf/compiler/java/java_message.h>
-#include <google/protobuf/compiler/java/java_message_lite.h>
 #include <google/protobuf/compiler/java/java_service.h>
 
 namespace google {
@@ -58,12 +57,7 @@ ImmutableGeneratorFactory::~ImmutableGeneratorFactory() {}
 
 MessageGenerator* ImmutableGeneratorFactory::NewMessageGenerator(
     const Descriptor* descriptor) const {
-  if (descriptor->file()->options().optimize_for() ==
-      FileOptions::LITE_RUNTIME) {
-    return new ImmutableMessageLiteGenerator(descriptor, context_);
-  } else {
-    return new ImmutableMessageGenerator(descriptor, context_);
-  }
+  return new ImmutableMessageGenerator(descriptor, context_);
 }
 
 ExtensionGenerator* ImmutableGeneratorFactory::NewExtensionGenerator(

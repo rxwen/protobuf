@@ -47,10 +47,6 @@
 namespace google {
 
 namespace protobuf {
-
-class Arena;
-namespace io { class CodedInputStream; }
-
 namespace internal {
 
 
@@ -89,6 +85,12 @@ LIBPROTOBUF_EXPORT inline const ::std::string& GetEmptyString() {
   return GetEmptyStringAlreadyInited();
 }
 
+// Defined in generated_message_reflection.cc -- not actually part of the lite
+// library.
+//
+// TODO(jasonh): The various callers get this declaration from a variety of
+// places: probably in most cases repeated_field.h. Clean these up so they all
+// get the declaration from this file.
 LIBPROTOBUF_EXPORT int StringSpaceUsedExcludingSelf(const string& str);
 
 
@@ -103,15 +105,6 @@ template <class Type> bool AllAreInitialized(const Type& t) {
   }
   return true;
 }
-
-class ArenaString;
-
-// Read a length (varint32), followed by a string, from *input.  Return a
-// pointer to a copy of the string that resides in *arena.  Requires both
-// args to be non-NULL.  If something goes wrong while reading the data
-// then NULL is returned (e.g., input does not start with a valid varint).
-ArenaString* ReadArenaString(::google::protobuf::io::CodedInputStream* input,
-                             ::google::protobuf::Arena* arena);
 
 }  // namespace internal
 }  // namespace protobuf

@@ -39,8 +39,8 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.io.UnsupportedEncodingException;
 import java.nio.ByteBuffer;
-import java.nio.charset.Charset;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Iterator;
@@ -56,7 +56,7 @@ import java.util.Random;
  */
 public class ByteStringTest extends TestCase {
 
-  private static final Charset UTF_16 = Charset.forName("UTF-16");
+  private static final String UTF_16 = "UTF-16";
 
   static byte[] getTestBytes(int size, long seed) {
     Random random = new Random(seed);
@@ -128,7 +128,7 @@ public class ByteStringTest extends TestCase {
         isArrayRange(byteString.toByteArray(), bytes, 500, bytes.length - 500));
   }
 
-  public void testCopyFrom_StringEncoding() {
+  public void testCopyFrom_StringEncoding() throws UnsupportedEncodingException {
     String testString = "I love unicode \u1234\u5678 characters";
     ByteString byteString = ByteString.copyFrom(testString, UTF_16);
     byte[] testBytes = testString.getBytes(UTF_16);
@@ -136,10 +136,10 @@ public class ByteStringTest extends TestCase {
         isArrayRange(byteString.toByteArray(), testBytes, 0, testBytes.length));
   }
 
-  public void testCopyFrom_Utf8() {
+  public void testCopyFrom_Utf8() throws UnsupportedEncodingException {
     String testString = "I love unicode \u1234\u5678 characters";
     ByteString byteString = ByteString.copyFromUtf8(testString);
-    byte[] testBytes = testString.getBytes(Internal.UTF_8);
+    byte[] testBytes = testString.getBytes("UTF-8");
     assertTrue("copyFromUtf8 string must respect the charset",
         isArrayRange(byteString.toByteArray(), testBytes, 0, testBytes.length));
   }
@@ -153,7 +153,6 @@ public class ByteStringTest extends TestCase {
         isArrayRange(byteString.toByteArray(), testBytes, 0, testBytes.length));
     // Call copyFrom on an iteration that's not a collection
     ByteString byteStringAlt = ByteString.copyFrom(new Iterable<ByteString>() {
-      @Override
       public Iterator<ByteString> iterator() {
         return pieces.iterator();
       }
@@ -381,7 +380,7 @@ public class ByteStringTest extends TestCase {
       return -1;
     }
   }
-
+  
   // A stream which exposes the byte array passed into write(byte[], int, int).
   private static class EvilOutputStream extends OutputStream {
     public byte[] capturedArray = null;
@@ -399,9 +398,9 @@ public class ByteStringTest extends TestCase {
     }
   }
 
-  public void testToStringUtf8() {
+  public void testToStringUtf8() throws UnsupportedEncodingException {
     String testString = "I love unicode \u1234\u5678 characters";
-    byte[] testBytes = testString.getBytes(Internal.UTF_8);
+    byte[] testBytes = testString.getBytes("UTF-8");
     ByteString byteString = ByteString.copyFrom(testBytes);
     assertEquals("copyToStringUtf8 must respect the charset",
         testString, byteString.toStringUtf8());
@@ -419,7 +418,7 @@ public class ByteStringTest extends TestCase {
 
   // Test newOutput() using a variety of buffer sizes and a variety of (fixed)
   // write sizes
-  public void testNewOutput_ArrayWrite() {
+  public void testNewOutput_ArrayWrite() throws IOException {
     byte[] bytes = getTestBytes();
     int length = bytes.length;
     int[] bufferSizes = {128, 256, length / 2, length - 1, length, length + 1,
@@ -442,7 +441,7 @@ public class ByteStringTest extends TestCase {
 
   // Test newOutput() using a variety of buffer sizes, but writing all the
   // characters using write(byte);
-  public void testNewOutput_WriteChar() {
+  public void testNewOutput_WriteChar() throws IOException {
     byte[] bytes = getTestBytes();
     int length = bytes.length;
     int[] bufferSizes = {0, 1, 128, 256, length / 2,
@@ -461,7 +460,7 @@ public class ByteStringTest extends TestCase {
 
   // Test newOutput() in which we write the bytes using a variety of methods
   // and sizes, and in which we repeatedly call toByteString() in the middle.
-  public void testNewOutput_Mixed() {
+  public void testNewOutput_Mixed() throws IOException {
     Random rng = new Random(1);
     byte[] bytes = getTestBytes();
     int length = bytes.length;
@@ -493,13 +492,13 @@ public class ByteStringTest extends TestCase {
           isArrayRange(bytes, byteString.toByteArray(), 0, bytes.length));
     }
   }
-
-  public void testNewOutputEmpty() {
+  
+  public void testNewOutputEmpty() throws IOException {
     // Make sure newOutput() correctly builds empty byte strings
     ByteString byteString = ByteString.newOutput().toByteString();
     assertEquals(ByteString.EMPTY, byteString);
   }
-
+  
   public void testNewOutput_Mutating() throws IOException {
     Output os = ByteString.newOutput(5);
     os.write(new byte[] {1, 2, 3, 4, 5});
@@ -706,14 +705,14 @@ public class ByteStringTest extends TestCase {
     }
     return pieces;
   }
-
+  
   private byte[] substringUsingWriteTo(
       ByteString data, int offset, int length) throws IOException {
     ByteArrayOutputStream output = new ByteArrayOutputStream();
     data.writeTo(output, offset, length);
     return output.toByteArray();
   }
-
+  
   public void testWriteToOutputStream() throws Exception {
     // Choose a size large enough so when two ByteStrings are concatenated they
     // won't be merged into one byte array due to some optimizations.
@@ -728,7 +727,7 @@ public class ByteStringTest extends TestCase {
     byte[] result = substringUsingWriteTo(left, 1, 1);
     assertEquals(1, result.length);
     assertEquals((byte) 11, result[0]);
-
+    
     byte[] data2 = new byte[dataSize];
     for (int i = 0; i < data1.length; i++) {
       data2[i] = (byte) 2;
