@@ -73,7 +73,7 @@
 // instructions from:
 // https://gcc.gnu.org/onlinedocs/libstdc++/manual/backwards.html
 # if __GNUC__ >= 4
-#  define GOOGLE_PROTOBUF_HAS_TR1
+//#  define GOOGLE_PROTOBUF_HAS_TR1
 # elif __GNUC__ >= 3
 #  include <backward/hash_map>
 #  define GOOGLE_PROTOBUF_HASH_MAP_CLASS hash_map
