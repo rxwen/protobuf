@@ -105,6 +105,9 @@ ifneq ($(TARGET_SIMULATOR),true)
 LOCAL_C_INCLUDES += bionic		# very important!
 LOCAL_C_INCLUDES += external/stlport/stlport
 LOCAL_SHARED_LIBRARIES += libstlport libdl
+LOCAL_CFLAGS += -DNO_TR1
+else
+LOCAL_LDLIBS += -lpthread
 endif
 
 LOCAL_SHARED_LIBRARIES += liblog
@@ -155,6 +158,10 @@ LOCAL_C_INCLUDES := $(LOCAL_PATH)/src
 LOCAL_CFLAGS += -DGOOGLE_PROTOBUF_NO_RTTI \
 				-DOPENSOURCE_PROTOBUF_CPP_BOOTSTRAP
 LOCAL_CPP_EXTENSION := .cc
+
+ifeq ($(TARGET_SIMULATOR),true)
+LOCAL_LDLIBS += -lpthread
+endif
 
 LOCAL_STATIC_LIBRARIES := libprotobuf
 
