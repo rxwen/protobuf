@@ -105,7 +105,7 @@ ifneq ($(TARGET_SIMULATOR),true)
 LOCAL_C_INCLUDES += bionic		# very important!
 LOCAL_C_INCLUDES += external/stlport/stlport
 LOCAL_SHARED_LIBRARIES += libstlport libdl
-LOCAL_CFLAGS += -DNO_TR1
+LOCAL_CFLAGS += -DGOOGLE_PROTOBUF_NO_TR1
 else
 LOCAL_LDLIBS += -lpthread
 endif
