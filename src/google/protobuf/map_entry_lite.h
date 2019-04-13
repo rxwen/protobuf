@@ -79,7 +79,7 @@ struct MoveHelper<false, true, is_stringlike, T> {  // messages
 template <typename T>
 struct MoveHelper<false, false, true, T> {  // strings and similar
   static void Move(T* src, T* dest) {
-#if __cplusplus >= 201103L
+#if __cplusplus >= 201103L && !defined(_TERNCY_CXX11_ENABLED)
     *dest = std::move(*src);
 #else
     dest->swap(*src);
